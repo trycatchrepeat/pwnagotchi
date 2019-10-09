@@ -319,58 +319,56 @@ class Agent(Client, AsyncAdvertiser, AsyncTrainer):
             if not no_exceptions:
                 raise
 
-    def _event_poller(self):
+    def _event_handler(self, e):
+        new_shakes = 0
+        s = self.session()
+        self._update_uptime(s)
+
+        if self._advertiser is not None:
+            self._update_advertisement(s)
+            self._update_peers()
+
+        self._update_counters()
+
+        try:
+            if e['tag'] == 'wifi.client.handshake':
+                filename = h['data']['file']
+                sta_mac = h['data']['station']
+                ap_mac = h['data']['ap']
+                key = "%s -> %s" % (sta_mac, ap_mac)
+
+                if key not in self._handshakes:
+                    self._handshakes[key] = h
+                    new_shakes += 1
+                    ap_and_station = self._find_ap_sta_in(sta_mac, ap_mac, s)
+                    if ap_and_station is None:
+                        logging.warning("!!! captured new handshake: %s !!!" % key)
+                        self._last_pwnd = ap_mac
+                        plugins.on('handshake', self, filename, ap_mac, sta_mac)
+                    else:
+                        (ap, sta) = ap_and_station
+                        self._last_pwnd = ap['hostname'] if ap['hostname'] != '' and ap[
+                            'hostname'] != '<hidden>' else ap_mac
+                        logging.warning("!!! captured new handshake on channel %d: %s (%s) -> %s [%s (%s)] !!!" % ( \
+                            ap['channel'],
+                            sta['mac'], sta['vendor'],
+                            ap['hostname'], ap['mac'], ap['vendor']))
+                        plugins.on('handshake', self, filename, ap, sta)
+
+        except Exception as e:
+            logging.exception("error")
+
+        finally:
+            self._update_handshakes(new_shakes)
+    
+    def start_event_listener(self):
         self._load_recovery_data()
 
         self.run('events.clear')
 
-        logging.debug("event polling started ...")
-        while True:
-            time.sleep(1)
-
-            new_shakes = 0
-            s = self.session()
-            self._update_uptime(s)
-
-            if self._advertiser is not None:
-                self._update_advertisement(s)
-                self._update_peers()
-
-            self._update_counters()
-
-            try:
-                for h in [e for e in self.events() if e['tag'] == 'wifi.client.handshake']:
-                    filename = h['data']['file']
-                    sta_mac = h['data']['station']
-                    ap_mac = h['data']['ap']
-                    key = "%s -> %s" % (sta_mac, ap_mac)
-
-                    if key not in self._handshakes:
-                        self._handshakes[key] = h
-                        new_shakes += 1
-                        ap_and_station = self._find_ap_sta_in(sta_mac, ap_mac, s)
-                        if ap_and_station is None:
-                            logging.warning("!!! captured new handshake: %s !!!" % key)
-                            self._last_pwnd = ap_mac
-                            plugins.on('handshake', self, filename, ap_mac, sta_mac)
-                        else:
-                            (ap, sta) = ap_and_station
-                            self._last_pwnd = ap['hostname'] if ap['hostname'] != '' and ap[
-                                'hostname'] != '<hidden>' else ap_mac
-                            logging.warning("!!! captured new handshake on channel %d: %s (%s) -> %s [%s (%s)] !!!" % ( \
-                                ap['channel'],
-                                sta['mac'], sta['vendor'],
-                                ap['hostname'], ap['mac'], ap['vendor']))
-                            plugins.on('handshake', self, filename, ap, sta)
-
-            except Exception as e:
-                logging.exception("error")
-
-            finally:
-                self._update_handshakes(new_shakes)
-
-    def start_event_polling(self):
-        _thread.start_new_thread(self._event_poller, ())
+        self.events_listener(self._event_handler)
+        
+        logging.debug("event listener started ...")
 
     def is_module_running(self, module):
         s = self.session()

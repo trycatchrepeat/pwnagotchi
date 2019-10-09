@@ -132,7 +132,7 @@ agent.start_ai()
 agent.setup_events()
 agent.set_starting()
 agent.start_monitor_mode()
-agent.start_event_polling()
+agent.start_event_listener()
 
 # print initial stats
 agent.next_epoch()

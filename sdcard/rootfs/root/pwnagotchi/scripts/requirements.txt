@@ -11,3 +11,5 @@ numpy
 inky
 smbus
 pillow
+asyncio
+websockets

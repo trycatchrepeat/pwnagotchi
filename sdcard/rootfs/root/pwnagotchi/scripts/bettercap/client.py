@@ -1,6 +1,8 @@
 import logging
 import requests
+import asyncio
 from requests.auth import HTTPBasicAuth
+from bettercap.websocket_client import WebSocketClient
 
 
 class Client(object):
@@ -12,6 +14,7 @@ class Client(object):
         self.password = password
         self.url = "%s://%s:%d/api" % (scheme, hostname, port)
         self.auth = HTTPBasicAuth(username, password)
+        self.ws = WebSocketClient(scheme, hostname, port, username, password)
 
     def _decode(self, r, verbose_errors=True):
         try:
@@ -33,6 +36,18 @@ class Client(object):
     def events(self):
         r = requests.get("%s/events" % self.url, auth=self.auth)
         return self._decode(r)
+
+    def events_listener(self, handler):
+        loop = asyncio.get_event_loop()
+
+        connection = loop.run_until_complete(self.ws.connect())
+
+        tasks = [
+            asyncio.ensure_future(self.ws.heartbeat(connection)),
+            asyncio.ensure_future(self.ws.receiveMessage(connection, handler)),
+        ]
+
+        loop.run_until_complete(asyncio.wait(tasks))
 
     def run(self, command, verbose_errors=True):
         r = requests.post("%s/session" % self.url, auth=self.auth, json={'cmd': command})

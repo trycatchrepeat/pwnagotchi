@@ -37,7 +37,7 @@ bindkey ^[[C next
 
 screen -t shell
 screen -t manual-mode /bin/bash -c "/root/pwnagotchi/scripts/main.py --manual"
-screen -t bettercap /usr/bin/bettercap -caplet http-ui -eval "!/usr/bin/monstart; set wifi.interface mon0"
+screen -t bettercap /usr/bin/bettercap -caplet http-ui -eval "!/usr/bin/monstart; set api.rest off; set api.rest.websocket true; set api.rest on; set wifi.interface mon0"
 
 select log
 
